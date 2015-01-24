@@ -1,0 +1,71 @@
+---
+title: "Prediction of exercise quality"
+author: "Frank Wartena"
+date: "Saturday, January 24, 2015"
+output: html_document
+---
+
+Introduction
+============
+
+This documents the assignment of the Practical Machine Learning class on Coursera. The objective is to predict the quality with which the participant performs the weight lifting exercise based on accelerometer data from both the participant and the dumbell. The data is from Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. [Qualitative Activity Recognition of Weight Lifting Exercises](http://groupware.les.inf.puc-rio.br/har). Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.  
+
+Participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.  
+
+Data loading and exploration
+============================
+The data was downloaded from the class material on Coursera: [training set](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and [test set](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv). For development of the predictive model only the training set was used.  
+
+```{r}
+## Make sure the training set is in the same directory
+## as this file and the R working directory is set correctly
+library(caret)
+data <- read.csv("./pml-training.csv")
+```
+
+Exploration of the training set shows there are 160 variables in the data set for a total of 19622 observations. There are two types of data in the data set: raw data (variable new\_window = no) and summary data (variable new\_window = yes). For the raw data there are many variables that have the value 0 or not applicable. As the test set only contains raw data I decided to exclude the summary data rows for building the classifier, this reduced the number of observations to 19216  
+
+To remove features that are not relevant for creating the classifier I removed all columns that have near zero variance in their data. In addition I removed the first 6 features which are also not relevant for the classifier (X, user\_name, time stamp part 1 and 2, cvtd timestamp, num\_window). This left 53 columns in the data set, 52 features and the column with the class of each observation.  Finally I split the set into a training and a test set to be able to estimate the out of sample error.
+
+
+```{r}
+raw <- data[data$new_window=="no",]
+nearzero <- nzv(raw)
+rawClean <- raw[,-nearzero]
+del <- 1:6
+rawClean <- rawClean[,-del]
+
+set.seed(123)
+trainIndex <- createDataPartition(rawClean$classe, p = 0.60,list=FALSE)
+train <- rawClean[trainIndex,]
+test <- rawClean[-trainIndex,]
+```
+
+Training
+========
+I decided to use a Random Forest as classifier for this classification problem. According to [documentation](http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#workings) of the Random Forest model explicit cross validation is not needed for this type of classifier as that is done by default when training the model.  
+
+```{r}
+library(randomForest)
+rf <- randomForest(classe ~ ., data=train)
+rf
+```
+
+As shown in the output of the random forest model there is also an indication of the out of sample error, which is estimated to be 0.55%. We will compare this to the error estimate on our own test set in the next section.  
+
+Testing
+=======
+
+To estimate the out of sample error I've applied the trained random forest model on the test set that I created earlier. The result shows that the accuracy on the test set is 99.44% (95% confidence interval 99.25%-99.59%). Notice that this exactly the same number that the model already indicated itself (error of 0.55% means an accuracy of 100%-0.55% = 99.45%).    
+
+```{r}
+prediction <- predict(rf, newdata=test)
+confusionMatrix(prediction, test$classe)
+```
+
+Conclusion
+==========
+
+By using a random forest classifier the quality with which a weight lifting exercise is performed can be almost perfectly classified with a higher than 99% accuracy. This enables great possibilities for unsupervised exercising by using sensors on the person that is performing the exercise and the dumbell.  
+
+The limitation of course is that only 4 common mistakes of doing the exercise where included in the data, which means that if a person would be making another type of mistake the classifier will not be able to correctly identify the type of error, although it might still be able to indicate that the exercise is not being done correctly.  
